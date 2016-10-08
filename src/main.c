@@ -39,6 +39,18 @@ static void textlist_insert(textlist_t* afterwhat) {
 	memset(new_item->text, '\0', 81);
 }
 
+static textlist_t* textlist_backspace(textlist_t* deletewhat) {
+	textlist_t* prev_item = deletewhat->prev;
+	textlist_t* next_item = deletewhat->next;
+
+	if(next_item) next_item->prev = prev_item;
+	prev_item->next = next_item;
+
+	free(deletewhat);
+
+	return prev_item;
+}
+
 static textlist_t* sct_nextline(textlist_t* text, int8_t* y) {
 	*y = *y + 1;
 	return text->next;
@@ -115,15 +127,31 @@ int main(int argc, char *argv[]) {
 			// Functions
 			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
 				cursorx--;
-				if(cursorx < 0) cursorx = 0;
-				line->text[cursorx] = '\0';
+				if(cursorx < 0) {
+					if(line->prev != NULL) {
+						line = textlist_backspace(line);
+						cursory--;
+						cursorx = strlen(line->text);
+					}else{
+						cursorx = 0;
+					}
+				}else{
+					line->text[cursorx] = '\0';
+				}
 				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
 			}
 			else if(strcmp(name, "^D") == 0) {
-				sct_exit(&running, "DELETE LINE");
+				if(line->prev != NULL) {
+					line = textlist_backspace(line);
+					cursory--;
+					cursorx = 0;
+				}else{
+					// line = textlist_delete(line);
+				}
+				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "^I") == 0) {
 				sct_exit(&running, "TAB");
