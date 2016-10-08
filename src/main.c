@@ -101,6 +101,8 @@ void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
 {
 	uint8_t max = 79 - (line->tabs * 8);
 	if(*x > max) *x = max;
+	if(strlen(line->text) >= max) return;
+	memmove(line->text + *x + 1, line->text + *x, strlen(line->text + *x) + 1);
 	line->text[*x] = c;
 	*x = *x + 1;
 	sct_draw(w, text, line, x, y);
@@ -164,6 +166,11 @@ int main(int argc, char *argv[]) {
 					}
 				}else{
 					line->text[cursorx] = '\0';
+					if(line->text[cursorx + 1])
+						memmove(line->text + cursorx,
+							line->text+cursorx+1,
+							strlen(line->text +
+								cursorx + 1)+1);
 				}
 				sct_draw(w, text, line, &cursorx, &cursory);
 			}
