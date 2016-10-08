@@ -42,18 +42,6 @@ static void textlist_insert(textlist_t* afterwhat) {
 	new_item->tabs = 0;
 }
 
-static textlist_t* textlist_backspace(textlist_t* deletewhat) {
-	textlist_t* prev_item = deletewhat->prev;
-	textlist_t* next_item = deletewhat->next;
-
-	if(next_item) next_item->prev = prev_item;
-	prev_item->next = next_item;
-
-	free(deletewhat);
-
-	return prev_item;
-}
-
 static textlist_t* textlist_delete(textlist_t* deletewhat) {
 	textlist_t* next_item = deletewhat->next;
 
@@ -64,14 +52,31 @@ static textlist_t* textlist_delete(textlist_t* deletewhat) {
 	return next_item;
 }
 
-static textlist_t* sct_nextline(textlist_t* text, int8_t* y) {
+static textlist_t* sct_nextline(textlist_t* line, textlist_t** text, int8_t* y,
+	uint32_t* sln)
+{
+	if(*y == 9) {
+		*sln = *sln + 1;
+		*text = (*text)->next;
+		return line->next;
+	}
 	*y = *y + 1;
-	return text->next;
+	return line->next;
 }
 
-static textlist_t* sct_prevline(textlist_t* text, int8_t* y) {
+static textlist_t* sct_prevline(textlist_t* line, textlist_t** text, int8_t* y,
+	uint32_t* sln)
+{
+	if(*y == 0) {
+		if(*sln) {
+			*sln = *sln - 1;
+			*text = (*text)->prev;
+			return line->prev;
+		}
+		return line;
+	}
 	*y = *y - 1;
-	return text->prev;
+	return line->prev;
 }
 
 static void sct_exit(uint8_t* running, const char* message) {
@@ -152,26 +157,60 @@ static int8_t sct_mouseinputy(int8_t y) {
 	return ry;
 }
 
-static textlist_t* sct_cursorup(WINDOW* w, textlist_t* text, textlist_t* line,
-	int8_t* x, int8_t* y, uint32_t sln)
+static textlist_t* sct_cursorup(WINDOW* w, textlist_t** text, textlist_t* line,
+	int8_t* x, int8_t* y, uint32_t* sln)
 {
 	if(line->prev) {
-		line = sct_prevline(line, y);
+		line = sct_prevline(line, text, y, sln);
 		*x = strlen(line->text);
-		sct_draw(w, text, line, x, y, sln);
+		sct_draw(w, *text, line, x, y, *sln);
 	}
 	return line;
 }
 
-static textlist_t* sct_cursordn(WINDOW* w, textlist_t* text, textlist_t* line,
-	int8_t* x, int8_t* y, uint32_t sln, uint8_t end)
+static textlist_t* sct_cursordn(WINDOW* w, textlist_t** text, textlist_t* line,
+	int8_t* x, int8_t* y, uint32_t* sln, uint8_t end)
 {
 	if(line->next) {
-		line = sct_nextline(line, y);
+		line = sct_nextline(line, text, y, sln);
 		*x = end ? strlen(line->text) : 0;
-		sct_draw(w, text, line, x, y, sln);
+		sct_draw(w, *text, line, x, y, *sln);
 	}
 	return line;
+}
+
+static textlist_t* sct_backspace(WINDOW* w, textlist_t** text,
+	textlist_t* line, int8_t* x, int8_t* y, uint32_t* sln)
+{
+	textlist_t* prev_item = line->prev;
+	textlist_t* next_item = line->next;
+
+	if(next_item) next_item->prev = prev_item;
+	prev_item->next = next_item;
+
+	free(line);
+
+	// Scroll Up if Needed
+	if(*sln) {
+		int end;
+		textlist_t* temp = *text;
+		for(int i = 0; i < 10; i++) {
+			temp = temp->next;
+			if(temp == NULL && (*text)->prev) {
+				*sln = *sln - 1;
+				*y = *y + 1;
+				*text = (*text)->prev;
+				break;
+			}
+		}
+	}
+
+	if(next_item) {
+		return next_item;
+	}else{
+		sct_cursorup(w, text, line, x, y, sln);
+		return prev_item;
+	}
 }
 
 // Main function.
@@ -237,8 +276,9 @@ int main(int argc, char *argv[]) {
 						line->tabs--;
 						cursorx = 0;
 					}else if(line->prev != NULL) {
-						line = textlist_backspace(line);
-						cursory--;
+						line = sct_backspace(w,
+							&text, line, &cursorx,
+							&cursory, &sln);
 						cursorx = strlen(line->text);
 					}else{
 						cursorx = 0;
@@ -255,13 +295,17 @@ int main(int argc, char *argv[]) {
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
-				line = textlist_backspace(line->next);
+//				line = sct_backspace(line->next);
 			}
 			else if(strcmp(name, "^D") == 0) {
 				if(line->prev != NULL) {
 					// Delete non-first line
-					line = textlist_backspace(line);
-					cursory--;
+					line = sct_backspace(w, &text,
+						line, &cursorx, &cursory, &sln);
+//					if(line->next)
+//						line = line->next;
+//					else
+//						sct_cursorup();
 					cursorx = strlen(line->text);
 				}else if(line->next != NULL) {
 					// Delete 1st line
@@ -290,7 +334,7 @@ int main(int argc, char *argv[]) {
 			else if(strcmp(name, "^J") == 0) {
 				// Newline
 				textlist_insert(line);
-				line = sct_nextline(line, &cursory);
+				line = sct_nextline(line, &text, &cursory, &sln);
 				cursorx = 0;
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
@@ -298,17 +342,17 @@ int main(int argc, char *argv[]) {
 				// Alt + other
 			}
 			else if(strcmp(name, "KEY_UP") == 0) {
-				line = sct_cursorup(w, text, line, &cursorx,
-					&cursory, sln);
+				line = sct_cursorup(w, &text, line, &cursorx,
+					&cursory, &sln);
 			}
 			else if(strcmp(name, "KEY_DOWN") == 0) {
-				line = sct_cursordn(w, text, line, &cursorx,
-					&cursory, sln, 1);
+				line = sct_cursordn(w, &text, line, &cursorx,
+					&cursory, &sln, 1);
 			}
 			else if(strcmp(name, "KEY_RIGHT") == 0) {
 				if(cursorx >= strlen(line->text)) {
-					line = sct_cursordn(w, text, line,
-						&cursorx, &cursory, sln, 0);
+					line = sct_cursordn(w, &text, line,
+						&cursorx, &cursory, &sln, 0);
 				}else{
 					cursorx++;
 					sct_draw(w, text, line, &cursorx,
@@ -317,8 +361,8 @@ int main(int argc, char *argv[]) {
 			}
 			else if(strcmp(name, "KEY_LEFT") == 0) {
 				if(cursorx <= 0) {
-					line = sct_cursorup(w, text, line,
-						&cursorx, &cursory, sln);
+					line = sct_cursorup(w, &text, line,
+						&cursorx, &cursory, &sln);
 				}else{
 					cursorx--;
 					sct_draw(w, text, line, &cursorx,
