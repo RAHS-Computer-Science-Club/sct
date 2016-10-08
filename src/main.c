@@ -5,17 +5,11 @@
 
 #include <stdio.h> // For using printf()
 #include <string.h> // For using strlen()
-#include <stdint.h> // For using int8_t, uint8_t etc variable types.
 #include <ncurses.h> // For getting input, etc.
 #include <stdlib.h> // For exit()
 #include <unistd.h> // For sleep()
 
-typedef struct {
-	int8_t tabs;
-	void* prev;
-	char text[81];
-	void* next;
-}textlist_t;
+#include "sct.h"
 
 static textlist_t* init_textlist(void) {
 	textlist_t* rtn = malloc(sizeof(textlist_t));
@@ -26,7 +20,7 @@ static textlist_t* init_textlist(void) {
 	return rtn;
 }
 
-static void textlist_insert(textlist_t* afterwhat) {
+void textlist_insert(textlist_t* afterwhat) {
 	textlist_t* new_next = afterwhat->next;
 	textlist_t* new_item = malloc(sizeof(textlist_t));
 
@@ -265,8 +259,11 @@ int main(int argc, char *argv[]) {
 			}
 			// Save
 			else if(strcmp(name, "^S") == 0) {
-				
-				sct_exit(&running, "EXITING ON SAVE");
+				sct_file_save("test.text", text);
+			}
+			else if(strcmp(name, "^O") == 0) {
+				sct_file_load("test.text", text);
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			// Functions
 			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
