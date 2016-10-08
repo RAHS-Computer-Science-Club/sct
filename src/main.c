@@ -34,7 +34,6 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 	int i;
 	uint8_t infile = 1;
 
-	curs_set(FALSE);
 	for(i = 0; i < 10; i++) {
 		if(infile) {
 			mvprintw(i + 1, 0, "%s\n", text->text);
@@ -48,7 +47,8 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 		}
 	}
 	wmove(w, 1 + *y, *x);
-	curs_set(TRUE);
+	chgat(1, A_REVERSE, 0, NULL);
+	refresh();
 }
 
 // Main function.
@@ -58,6 +58,7 @@ int main(int argc, char *argv[]) {
 	uint8_t running = 1;
 	WINDOW *w = initscr();
 	int8_t cursorx = 0, cursory = 0;
+	uint8_t mouseHeldDown = 0;
 
 	cbreak();
 	noecho();
@@ -67,6 +68,7 @@ int main(int argc, char *argv[]) {
 	nodelay(w, TRUE);
 	curs_set(FALSE);
 	raw();
+	mousemask(ALL_MOUSE_EVENTS, NULL);
 
 	// Print some text
 	mvprintw(0, 0, "Science's Creamy Text Editor - SCT");
@@ -127,6 +129,30 @@ int main(int argc, char *argv[]) {
 			else if(strcmp(name, "KEY_NPAGE") == 0) {
 				// Page DN
 			}
+			else if(strcmp(name, "KEY_MOUSE") == 0) {
+				MEVENT event;
+
+				getmouse(&event);
+				if(event.bstate == BUTTON1_PRESSED ||
+					event.bstate == BUTTON1_CLICKED ||
+					event.bstate == BUTTON1_DOUBLE_CLICKED||
+					event.bstate == BUTTON1_TRIPLE_CLICKED )
+				{
+					cursorx = event.x;
+					sct_draw(w, text, &cursorx, &cursory);
+					mouseHeldDown = 1;
+				}
+				if(event.bstate == BUTTON1_RELEASED) {
+					cursorx = event.x;
+					sct_draw(w, text, &cursorx, &cursory);
+					mouseHeldDown = 0;
+//					cursory = event.y - 1;
+				}
+				if(event.bstate == REPORT_MOUSE_POSITION) {
+					cursorx = event.x;
+					sct_draw(w, text, &cursorx, &cursory);
+				}
+			}
 			else {
 				if(cursorx > 79) cursorx = 79;
 				text->text[cursorx] = name[0];
@@ -135,6 +161,13 @@ int main(int argc, char *argv[]) {
 				// Character Insert
 //			printf("NAME: %s\n", name);
 			}
+		}
+		if(mouseHeldDown) {
+//			MEVENT event;
+//
+//			getmouse(&event);
+//			cursorx = event.x;
+//			sct_draw(w, text, &cursorx, &cursory);
 		}
 	}
 	endwin();
