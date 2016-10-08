@@ -214,7 +214,7 @@ static void sct_title(int32_t w, int32_t h, const char* f, uint8_t s) {
 }
 
 static void sct_notify(const char* message) {
-	mvprintw(11, 0, "|-----|%79s|", message);
+	mvprintw(11, 0, "|-----| %77s |", message);
 }
 
 static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
@@ -287,6 +287,7 @@ int main(int argc, char *argv[]) {
 
 	sct_title(width, height, filename, saved);
 	sct_draw(w, text, line, &cursorx, &cursory, sln);
+	sct_notify("Started Science's Creamy Text Editor!");
 	while(running) {
 		int32_t chr = getch();
 		if(chr != ERR) {
