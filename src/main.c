@@ -7,7 +7,6 @@
 #include <string.h> // For using strlen()
 #include <ncurses.h> // For getting input, etc.
 #include <stdlib.h> // For exit()
-#include <unistd.h> // For sleep()
 
 #include "sct.h"
 
@@ -221,12 +220,14 @@ static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
 	uint8_t cancel = 0;
 
 	memset(input, '\0', strlen(input));
-	mvprintw(3, 15, "|--------------------------------------------------|");
-	mvprintw(4, 15, "|%50s|", message);
-	mvprintw(5, 15, "|--------------------------------------------------|");
-	mvprintw(6, 15, "| >:                                               |");
-	mvprintw(7, 15, "|--------------------------------------------------|");
-	mvprintw(6, 20, "%s", input);
+	mvprintw(2,14,"                                                      ");
+	mvprintw(3,14," ____________________________________________________ ");
+	mvprintw(4,14," |%50s| ", message);
+	mvprintw(5,14," |__________________________________________________| ");
+	mvprintw(6,14," | >:                                               | ");
+	mvprintw(7,14," |__________________________________________________| ");
+	mvprintw(8,14,"                                                      ");
+	mvprintw(6,20,"%s", input);
 	while(1) {
 		int in = getch();
 		const char* key = keyname(in);
@@ -242,6 +243,7 @@ static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
 			input[strlen(input)] = key[0];
 			input[strlen(input) + 1] = '\0';
 		}else{
+			sct_notify("Canceled.");
 			cancel = 1;
 			memcpy(input, UNTITLED, strlen(UNTITLED) + 1);
 			break;
@@ -293,6 +295,7 @@ int main(int argc, char *argv[]) {
 		if(chr != ERR) {
 			const char* name = keyname(chr);
 
+		SCT_DETECT:;
 			// Close
 			if(strcmp(name, "^Q") == 0) {
 				sct_exit(&running, "EXITING ON QUIT");
@@ -311,7 +314,7 @@ int main(int argc, char *argv[]) {
 				sct_notify("Cut.");
 			}
 			// Save
-			else if(strcmp(name, "^S") == 0) {
+			else if(strcmp(name, "^S")==0 || strcmp(name, "^E")==0){
 				if(strcmp(filename, UNTITLED) == 0) {
 					if(sct_popup(w, "Save As...", filename))
 					{
@@ -327,6 +330,8 @@ int main(int argc, char *argv[]) {
 				saved = 1;
 				sct_title(width,height,filename,saved);
 				sct_notify("Saved file.");
+				if(strcmp(name, "^E") == 0)
+					sct_exit(&running, "SAVE & QUIT");
 			}
 			else if(strcmp(name, "^O") == 0) {
 				if(sct_popup(w, "Open What File?", filename)) {
@@ -453,6 +458,37 @@ int main(int argc, char *argv[]) {
 				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "^[") == 0) {
+				int32_t chrtr;
+				const char* which = NULL;
+
+				sct_notify("w or s - save, q - quit, e - save &"
+					" quit, o - open, d - delete line");
+				while(1) {
+					chrtr = getch();
+					which = keyname(chrtr);
+					if(strlen(which) == 1 && chrtr != ERR)
+						break;
+				}
+				if(which[0] == 'w' || which[0] == 's') {
+					name = "^S";
+					goto SCT_DETECT;
+				}else if(which[0] == 'q') {
+					name = "^Q";
+					goto SCT_DETECT;
+				}else if(which[0] == 'e') {
+					name = "^E";
+					goto SCT_DETECT;
+				}else if(which[0] == 'o') {
+					name = "^O";
+					goto SCT_DETECT;
+				}else if(which[0] == '^') {
+					continue;
+				}else if(which[0] == 'd') {
+					name = "^D";
+					goto SCT_DETECT;
+				}else{
+					sct_notify("unknown function.");
+				}
 				// Alt + other
 			}
 			else if(strcmp(name, "KEY_UP") == 0) {
