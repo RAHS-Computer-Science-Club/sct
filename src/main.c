@@ -54,6 +54,16 @@ static textlist_t* textlist_backspace(textlist_t* deletewhat) {
 	return prev_item;
 }
 
+static textlist_t* textlist_delete(textlist_t* deletewhat) {
+	textlist_t* next_item = deletewhat->next;
+
+	next_item->prev = NULL;
+
+	free(deletewhat);
+
+	return next_item;
+}
+
 static textlist_t* sct_nextline(textlist_t* text, int8_t* y) {
 	*y = *y + 1;
 	return text->next;
@@ -176,14 +186,23 @@ int main(int argc, char *argv[]) {
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
+				line = textlist_backspace(line->next);
 			}
 			else if(strcmp(name, "^D") == 0) {
 				if(line->prev != NULL) {
+					// Delete non-first line
 					line = textlist_backspace(line);
 					cursory--;
+					cursorx = strlen(line->text);
+				}else if(line->next != NULL) {
+					// Delete 1st line
+					text = textlist_delete(line);
+					line = text;
 					cursorx = 0;
 				}else{
-					// line = textlist_delete(line);
+					// Delete last line left
+					memset(text->text, '\0', 81);
+					cursorx = 0;
 				}
 				sct_draw(w, text, line, &cursorx, &cursory);
 			}
