@@ -59,12 +59,19 @@ static textlist_t* sct_nextline(textlist_t* text, int8_t* y) {
 	return text->next;
 }
 
+static textlist_t* sct_prevline(textlist_t* text, int8_t* y) {
+	*y = *y - 1;
+	return text->prev;
+}
+
 static void sct_exit(uint8_t* running, const char* message) {
 	*running = 0;
 	endwin();
 }
 
-static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
+static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
+	int8_t* x, int8_t* y)
+{
 	int i;
 	uint8_t infile = 1;
 
@@ -84,7 +91,7 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 			mvprintw(i + 1, 0, " ~ ~ ~ \n");
 		}
 	}
-	wmove(w, 1 + *y, *x + (text->tabs * 8));
+	wmove(w, 1 + *y, *x + (line->tabs * 8));
 	chgat(1, A_REVERSE, 0, NULL);
 	refresh();
 }
@@ -96,7 +103,7 @@ void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
 	if(*x > max) *x = max;
 	line->text[*x] = c;
 	*x = *x + 1;
-	sct_draw(w, text, x, y);
+	sct_draw(w, text, line, x, y);
 }
 
 // Main function.
@@ -121,7 +128,7 @@ int main(int argc, char *argv[]) {
 
 	// Print some text
 	mvprintw(0, 0, "Science's Creamy Text Editor - SCT");
-	sct_draw(w, text, &cursorx, &cursory);
+	sct_draw(w, text, line, &cursorx, &cursory);
 	while(running) {
 		int32_t chr = getch();
 		if(chr != ERR) {
@@ -158,7 +165,7 @@ int main(int argc, char *argv[]) {
 				}else{
 					line->text[cursorx] = '\0';
 				}
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
@@ -171,33 +178,49 @@ int main(int argc, char *argv[]) {
 				}else{
 					// line = textlist_delete(line);
 				}
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "^I") == 0) {
 				line->tabs++;
 				if(line->tabs > 8) line->tabs = 8;
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_BTAB") == 0) {
 				line->tabs--;
 				if(line->tabs < 0) line->tabs = 0;
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "^J") == 0) {
 				textlist_insert(line);
 				line = sct_nextline(line, &cursory);
 				cursorx = 0;
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory);
 				// Newline
 			}
 			else if(strcmp(name, "^[") == 0) {
 				// Alt + other
 			}
 			else if(strcmp(name, "KEY_UP") == 0) {
-				
+				if(line->prev) {
+					line = sct_prevline(line, &cursory);
+					cursorx = strlen(line->text);
+					sct_draw(w, text, line, &cursorx, &cursory);
+				}
 			}
 			else if(strcmp(name, "KEY_DOWN") == 0) {
-				
+				if(line->next) {
+					line = sct_nextline(line, &cursory);
+					cursorx = strlen(line->text);
+					sct_draw(w, text, line, &cursorx, &cursory);
+				}
+			}
+			else if(strcmp(name, "KEY_RIGHT") == 0) {
+				if(cursorx != strlen(line->text)) cursorx++;
+				sct_draw(w, text, line, &cursorx, &cursory);
+			}
+			else if(strcmp(name, "KEY_LEFT") == 0) {
+				if(cursorx != 0) cursorx--;
+				sct_draw(w, text, line, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_PPAGE") == 0) {
 				// Page UP
@@ -215,18 +238,18 @@ int main(int argc, char *argv[]) {
 					event.bstate == BUTTON1_TRIPLE_CLICKED )
 				{
 					cursorx = event.x;
-					sct_draw(w, text, &cursorx, &cursory);
+					sct_draw(w, text, line, &cursorx, &cursory);
 					mouseHeldDown = 1;
 				}
 				if(event.bstate == BUTTON1_RELEASED) {
 					cursorx = event.x;
-					sct_draw(w, text, &cursorx, &cursory);
+					sct_draw(w, text, line, &cursorx, &cursory);
 					mouseHeldDown = 0;
 //					cursory = event.y - 1;
 				}
 				if(event.bstate == REPORT_MOUSE_POSITION) {
 					cursorx = event.x;
-					sct_draw(w, text, &cursorx, &cursory);
+					sct_draw(w, text, line, &cursorx, &cursory);
 				}
 			}
 			else {
@@ -241,7 +264,7 @@ int main(int argc, char *argv[]) {
 //
 //			getmouse(&event);
 //			cursorx = event.x;
-//			sct_draw(w, text, &cursorx, &cursory);
+//			sct_draw(w, text, line, &cursorx, &cursory);
 		}
 	}
 	endwin();
