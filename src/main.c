@@ -16,13 +16,32 @@ typedef struct {
 	void* next;
 }textlist_t;
 
-textlist_t* init_textlist(void) {
+static textlist_t* init_textlist(void) {
 	textlist_t* rtn = malloc(sizeof(textlist_t));
 	rtn->prev = NULL;
 	memset(rtn->text, '\0', 81);
-	rtn->text[0] = '\0';
 	rtn->next = NULL;
 	return rtn;
+}
+
+static void textlist_insert(textlist_t* afterwhat) {
+	textlist_t* new_next = afterwhat->next;
+	textlist_t* new_item = malloc(sizeof(textlist_t));
+
+	// Sandwich
+	afterwhat->next = new_item;
+	if(new_next) new_next->prev = new_item;
+
+	// Set item
+	new_item->prev = afterwhat;
+	new_item->next = new_next;
+
+	memset(new_item->text, '\0', 81);
+}
+
+static textlist_t* sct_nextline(textlist_t* text, int8_t* y) {
+	*y = *y + 1;
+	return text->next;
 }
 
 static void sct_exit(uint8_t* running, const char* message) {
@@ -55,6 +74,7 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 int main(int argc, char *argv[]) {
 	// Variable to store character name in.
 	textlist_t* text = init_textlist();
+	textlist_t* line = text;
 	uint8_t running = 1;
 	WINDOW *w = initscr();
 	int8_t cursorx = 0, cursory = 0;
@@ -96,7 +116,7 @@ int main(int argc, char *argv[]) {
 			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
 				cursorx--;
 				if(cursorx < 0) cursorx = 0;
-				text->text[cursorx] = '\0';
+				line->text[cursorx] = '\0';
 				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
@@ -112,10 +132,14 @@ int main(int argc, char *argv[]) {
 				// Shift - Tab
 			}
 			else if(strcmp(name, "^J") == 0) {
+				textlist_insert(line);
+				line = sct_nextline(line, &cursory);
+				cursorx = 0;
+				sct_draw(w, text, &cursorx, &cursory);
 				// Newline
 			}
 			else if(strcmp(name, "^[") == 0) {
-				// Newline
+				// Alt + other
 			}
 			else if(strcmp(name, "KEY_UP") == 0) {
 				
@@ -155,7 +179,7 @@ int main(int argc, char *argv[]) {
 			}
 			else {
 				if(cursorx > 79) cursorx = 79;
-				text->text[cursorx] = name[0];
+				line->text[cursorx] = name[0];
 				cursorx++;
 				sct_draw(w, text, &cursorx, &cursory);
 				// Character Insert
