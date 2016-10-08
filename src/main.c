@@ -80,7 +80,7 @@ static void sct_exit(uint8_t* running, const char* message) {
 }
 
 static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
-	int8_t* x, int8_t* y)
+	int8_t* x, int8_t* y, uint32_t sln)
 {
 	int i;
 	uint8_t infile = 1;
@@ -89,25 +89,43 @@ static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
 		if(infile) {
 			int j;
 			for(j = 0; j < text->tabs; j++) {
-				mvprintw(i + 1, j * 8, "        ");
+				mvprintw(i + 1, (j+1) * 8, "        ");
 			}
-			mvprintw(i + 1, text->tabs * 8, "%s\n", text->text);
+			mvprintw(i + 1, 0, "%5d | ", sln + i);
+			mvprintw(i + 1, 8 + text->tabs * 8, "%s\n", text->text);
 			if(text->next) {
 				text = text->next;
 			}else{
 				infile = 0;
 			}
 		}else{
-			mvprintw(i + 1, 0, " ~ ~ ~ \n");
+			mvprintw(i + 1, 0, "      | ");
+			mvprintw(i + 1, 8, "\n");
 		}
 	}
-	wmove(w, 1 + *y, *x + (line->tabs * 8));
+	wmove(w, 1 + *y, 8 + *x + (line->tabs * 8));
 	chgat(1, A_REVERSE, 0, NULL);
 	refresh();
 }
 
+/*static void sct_rendermultiselect(WINDOW* w, textlist_t text, int8_t* x, int8_t* y,
+	int8_t* lx, int8_t* ly)
+{
+	wmove(w, 1 + *y, *x + (line->tabs * 8));
+	chgat(1, A_REVERSE, 0, NULL);
+	refresh();
+}*/
+
+static void sct_renderlineselect(WINDOW* w, textlist_t* line, int8_t x, int8_t y,
+	int8_t lx)
+{
+	wmove(w, 1 + y, x + (line->tabs * 8));
+	chgat(lx - x, A_REVERSE, 0, NULL);
+	refresh();
+}
+
 void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
-	int8_t* x, int8_t* y, char c)
+	int8_t* x, int8_t* y, char c, uint32_t sln)
 {
 	uint8_t max = 79 - (line->tabs * 8);
 	if(*x > max) *x = max;
@@ -115,7 +133,45 @@ void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
 	memmove(line->text + *x + 1, line->text + *x, strlen(line->text + *x) + 1);
 	line->text[*x] = c;
 	*x = *x + 1;
-	sct_draw(w, text, line, x, y);
+	sct_draw(w, text, line, x, y, sln);
+}
+
+static int8_t sct_mouseinputx(textlist_t* line, int8_t x) {
+	int rx = x - (line->tabs * 8);
+
+	if(rx < 0) rx = 0;
+	if(rx > strlen(line->text)) rx = strlen(line->text);
+	if(x > 79) x = 79;
+	return rx;
+}
+
+static int8_t sct_mouseinputy(int8_t y) {
+	int ry = y - 1;
+
+	if(ry < 0) ry = 0;
+	return ry;
+}
+
+static textlist_t* sct_cursorup(WINDOW* w, textlist_t* text, textlist_t* line,
+	int8_t* x, int8_t* y, uint32_t sln)
+{
+	if(line->prev) {
+		line = sct_prevline(line, y);
+		*x = strlen(line->text);
+		sct_draw(w, text, line, x, y, sln);
+	}
+	return line;
+}
+
+static textlist_t* sct_cursordn(WINDOW* w, textlist_t* text, textlist_t* line,
+	int8_t* x, int8_t* y, uint32_t sln, uint8_t end)
+{
+	if(line->next) {
+		line = sct_nextline(line, y);
+		*x = end ? strlen(line->text) : 0;
+		sct_draw(w, text, line, x, y, sln);
+	}
+	return line;
 }
 
 // Main function.
@@ -126,7 +182,12 @@ int main(int argc, char *argv[]) {
 	uint8_t running = 1;
 	WINDOW *w = initscr();
 	int8_t cursorx = 0, cursory = 0;
+	int8_t selectx = 0, selecty = 0;
 	uint8_t mouseHeldDown = 0;
+	char filename[1024];
+	uint32_t sln = 0; // Starting Line Number
+
+	memset(filename, 0, 1024);
 
 	cbreak();
 	noecho();
@@ -140,7 +201,7 @@ int main(int argc, char *argv[]) {
 
 	// Print some text
 	mvprintw(0, 0, "Science's Creamy Text Editor - SCT");
-	sct_draw(w, text, line, &cursorx, &cursory);
+	sct_draw(w, text, line, &cursorx, &cursory, sln);
 	while(running) {
 		int32_t chr = getch();
 		if(chr != ERR) {
@@ -153,11 +214,19 @@ int main(int argc, char *argv[]) {
 			else if(strcmp(name, "^W") == 0) {
 				sct_exit(&running, "EXITING ON FILE CLOSE");
 			}
+			// Clipboard
 			else if(strcmp(name, "^C") == 0) {
-				sct_exit(&running, "EXITING ON FORCE CLOSE");
+				// Copy
+			}
+			else if(strcmp(name, "^V") == 0) {
+				// Paste
+			}
+			else if(strcmp(name, "^X") == 0) {
+				// Cut
 			}
 			// Save
 			else if(strcmp(name, "^S") == 0) {
+				
 				sct_exit(&running, "EXITING ON SAVE");
 			}
 			// Functions
@@ -182,7 +251,7 @@ int main(int argc, char *argv[]) {
 							strlen(line->text +
 								cursorx + 1)+1);
 				}
-				sct_draw(w, text, line, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
@@ -204,49 +273,57 @@ int main(int argc, char *argv[]) {
 					memset(text->text, '\0', 81);
 					cursorx = 0;
 				}
-				sct_draw(w, text, line, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			else if(strcmp(name, "^I") == 0) {
+				// Tab
 				line->tabs++;
 				if(line->tabs > 8) line->tabs = 8;
-				sct_draw(w, text, line, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			else if(strcmp(name, "KEY_BTAB") == 0) {
+				// Shift - Tab
 				line->tabs--;
 				if(line->tabs < 0) line->tabs = 0;
-				sct_draw(w, text, line, &cursorx, &cursory);
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			else if(strcmp(name, "^J") == 0) {
+				// Newline
 				textlist_insert(line);
 				line = sct_nextline(line, &cursory);
 				cursorx = 0;
-				sct_draw(w, text, line, &cursorx, &cursory);
-				// Newline
+				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			else if(strcmp(name, "^[") == 0) {
 				// Alt + other
 			}
 			else if(strcmp(name, "KEY_UP") == 0) {
-				if(line->prev) {
-					line = sct_prevline(line, &cursory);
-					cursorx = strlen(line->text);
-					sct_draw(w, text, line, &cursorx, &cursory);
-				}
+				line = sct_cursorup(w, text, line, &cursorx,
+					&cursory, sln);
 			}
 			else if(strcmp(name, "KEY_DOWN") == 0) {
-				if(line->next) {
-					line = sct_nextline(line, &cursory);
-					cursorx = strlen(line->text);
-					sct_draw(w, text, line, &cursorx, &cursory);
-				}
+				line = sct_cursordn(w, text, line, &cursorx,
+					&cursory, sln, 1);
 			}
 			else if(strcmp(name, "KEY_RIGHT") == 0) {
-				if(cursorx != strlen(line->text)) cursorx++;
-				sct_draw(w, text, line, &cursorx, &cursory);
+				if(cursorx >= strlen(line->text)) {
+					line = sct_cursordn(w, text, line,
+						&cursorx, &cursory, sln, 0);
+				}else{
+					cursorx++;
+					sct_draw(w, text, line, &cursorx,
+						&cursory, sln);
+				}
 			}
 			else if(strcmp(name, "KEY_LEFT") == 0) {
-				if(cursorx != 0) cursorx--;
-				sct_draw(w, text, line, &cursorx, &cursory);
+				if(cursorx <= 0) {
+					line = sct_cursorup(w, text, line,
+						&cursorx, &cursory, sln);
+				}else{
+					cursorx--;
+					sct_draw(w, text, line, &cursorx,
+						&cursory, sln);
+				}
 			}
 			else if(strcmp(name, "KEY_PPAGE") == 0) {
 				// Page UP
@@ -263,24 +340,64 @@ int main(int argc, char *argv[]) {
 					event.bstate == BUTTON1_DOUBLE_CLICKED||
 					event.bstate == BUTTON1_TRIPLE_CLICKED )
 				{
-					cursorx = event.x;
-					sct_draw(w, text, line, &cursorx, &cursory);
+					cursorx = sct_mouseinputx(line,event.x);
+					cursory = sct_mouseinputy(event.y);
+					line = text;
+					for(int i = 0; i < cursory; i++) {
+						if(line->next) {
+							line = line->next;
+						}else{
+							cursory = i;
+						}
+					}
+					sct_draw(w, text, line, &cursorx, &cursory, sln);
 					mouseHeldDown = 1;
 				}
 				if(event.bstate == BUTTON1_RELEASED) {
-					cursorx = event.x;
-					sct_draw(w, text, line, &cursorx, &cursory);
-					mouseHeldDown = 0;
-//					cursory = event.y - 1;
-				}
-				if(event.bstate == REPORT_MOUSE_POSITION) {
-					cursorx = event.x;
-					sct_draw(w, text, line, &cursorx, &cursory);
+					selectx = sct_mouseinputx(line,event.x);
+					selecty = sct_mouseinputy(event.y);
+					line = text;
+					for(int i = 0; i < cursory; i++) {
+						if(line->next) {
+							line = line->next;
+						}else{
+							cursory = i;
+						}
+					}
+					if(selecty < cursory) {
+						int8_t sy = selecty;
+						int8_t cy = cursory;
+						int8_t sx = selectx;
+						int8_t cx = cursorx;
+
+						selecty = cy;
+						selectx = cx;
+						cursory = sy;
+						cursorx = sx;
+					}else if(selectx < cursorx) {
+						int8_t sx = selectx;
+						int8_t cx = cursorx;
+
+						selectx = cx;
+						cursorx = sx;
+					}
+					sct_draw(w, text, line, &cursorx, &cursory, sln);
+					if(mouseHeldDown) {
+						if(selecty > cursory) {
+							
+						}else if(selectx > cursorx) {
+							sct_renderlineselect(w,
+								line, selectx,
+								selecty, cursorx
+							);
+						}
+						mouseHeldDown = 0;
+					}
 				}
 			}
 			else {
 				sct_insert(w, text, line, &cursorx, &cursory,
-					name[0]);
+					name[0], sln);
 				// Character Insert
 //				printf("NAME: %s\n", name);
 			}
@@ -290,7 +407,7 @@ int main(int argc, char *argv[]) {
 //
 //			getmouse(&event);
 //			cursorx = event.x;
-//			sct_draw(w, text, line, &cursorx, &cursory);
+//			sct_draw(w, text, line, &cursorx, &cursory, sln);
 		}
 	}
 	endwin();
