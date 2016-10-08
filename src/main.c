@@ -11,6 +11,7 @@
 #include <unistd.h> // For sleep()
 
 typedef struct {
+	int8_t tabs;
 	void* prev;
 	char text[81];
 	void* next;
@@ -21,6 +22,7 @@ static textlist_t* init_textlist(void) {
 	rtn->prev = NULL;
 	memset(rtn->text, '\0', 81);
 	rtn->next = NULL;
+	rtn->tabs = 0;
 	return rtn;
 }
 
@@ -37,6 +39,7 @@ static void textlist_insert(textlist_t* afterwhat) {
 	new_item->next = new_next;
 
 	memset(new_item->text, '\0', 81);
+	new_item->tabs = 0;
 }
 
 static textlist_t* textlist_backspace(textlist_t* deletewhat) {
@@ -67,7 +70,11 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 
 	for(i = 0; i < 10; i++) {
 		if(infile) {
-			mvprintw(i + 1, 0, "%s\n", text->text);
+			int j;
+			for(j = 0; j < text->tabs; j++) {
+				mvprintw(i + 1, j * 8, "        ");
+			}
+			mvprintw(i + 1, text->tabs * 8, "%s\n", text->text);
 			if(text->next) {
 				text = text->next;
 			}else{
@@ -77,9 +84,19 @@ static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 			mvprintw(i + 1, 0, " ~ ~ ~ \n");
 		}
 	}
-	wmove(w, 1 + *y, *x);
+	wmove(w, 1 + *y, *x + (text->tabs * 8));
 	chgat(1, A_REVERSE, 0, NULL);
 	refresh();
+}
+
+void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
+	int8_t* x, int8_t* y, char c)
+{
+	uint8_t max = 79 - (line->tabs * 8);
+	if(*x > max) *x = max;
+	line->text[*x] = c;
+	*x = *x + 1;
+	sct_draw(w, text, x, y);
 }
 
 // Main function.
@@ -128,7 +145,10 @@ int main(int argc, char *argv[]) {
 			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
 				cursorx--;
 				if(cursorx < 0) {
-					if(line->prev != NULL) {
+					if(line->tabs > 0) {
+						line->tabs--;
+						cursorx = 0;
+					}else if(line->prev != NULL) {
 						line = textlist_backspace(line);
 						cursory--;
 						cursorx = strlen(line->text);
@@ -154,10 +174,14 @@ int main(int argc, char *argv[]) {
 				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "^I") == 0) {
-				sct_exit(&running, "TAB");
+				line->tabs++;
+				if(line->tabs > 8) line->tabs = 8;
+				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_BTAB") == 0) {
-				// Shift - Tab
+				line->tabs--;
+				if(line->tabs < 0) line->tabs = 0;
+				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "^J") == 0) {
 				textlist_insert(line);
@@ -206,12 +230,10 @@ int main(int argc, char *argv[]) {
 				}
 			}
 			else {
-				if(cursorx > 79) cursorx = 79;
-				line->text[cursorx] = name[0];
-				cursorx++;
-				sct_draw(w, text, &cursorx, &cursory);
+				sct_insert(w, text, line, &cursorx, &cursory,
+					name[0]);
 				// Character Insert
-//			printf("NAME: %s\n", name);
+//				printf("NAME: %s\n", name);
 			}
 		}
 		if(mouseHeldDown) {
