@@ -24,8 +24,10 @@ void sct_file_save(const char* filename, textlist_t* text) {
 	fclose(file);
 }
 
-void sct_file_load(const char* filename, textlist_t* text) {
+uint8_t sct_file_load(const char* filename, textlist_t* text) {
 	FILE* file = fopen(filename, "r");
+
+	if(file == NULL) return 1;
 
 	while(text->prev != NULL)
 		text = text->prev;
@@ -43,6 +45,7 @@ void sct_file_load(const char* filename, textlist_t* text) {
 			}else if(chr == '\t') {
 				text->tabs ++;
 			}else if(chr == '\n') {
+				text->text[i] = '\0';
 				break;
 			}else{
 				// Insert character
@@ -70,4 +73,5 @@ SCT_FILE_LOAD_END:;
 	}
 
 	fclose(file);
+	return 0;
 }

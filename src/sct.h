@@ -8,5 +8,5 @@ typedef struct {
 }textlist_t;
 
 void sct_file_save(const char* filename, textlist_t* text);
-void sct_file_load(const char* filename, textlist_t* text);
+uint8_t sct_file_load(const char* filename, textlist_t* text);
 void textlist_insert(textlist_t* afterwhat);

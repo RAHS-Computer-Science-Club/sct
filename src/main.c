@@ -11,6 +11,8 @@
 
 #include "sct.h"
 
+#define UNTITLED "UN-TITLED"
+
 static textlist_t* init_textlist(void) {
 	textlist_t* rtn = malloc(sizeof(textlist_t));
 	rtn->prev = NULL;
@@ -86,11 +88,10 @@ static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
 
 	for(i = 0; i < 10; i++) {
 		if(infile) {
-			int j;
-			for(j = 0; j < text->tabs; j++) {
+			for(int j = 0; j < text->tabs; j++) {
 				mvprintw(i + 1, (j+1) * 8, "        ");
 			}
-			mvprintw(i + 1, 0, "%5d | ", sln + i);
+			mvprintw(i + 1, 0, "%5d | ", sln + i + 1);
 			mvprintw(i + 1, 8 + text->tabs * 8, "%s\n", text->text);
 			if(text->next) {
 				text = text->next;
@@ -207,6 +208,49 @@ static textlist_t* sct_backspace(WINDOW* w, textlist_t** text,
 	}
 }
 
+static void sct_title(int32_t w, int32_t h, const char* f, uint8_t s) {
+	mvprintw(0,0,"Science's Creamy Text Editor - SCT %03dx%03d %44s",w,h,f);
+	if(!s) mvprintw(0,86 - strlen(f), "*");
+}
+
+static void sct_notify(const char* message) {
+	mvprintw(11, 0, "|-----|%79s|", message);
+}
+
+static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
+	uint8_t cancel = 0;
+
+	memset(input, '\0', strlen(input));
+	mvprintw(3, 15, "|--------------------------------------------------|");
+	mvprintw(4, 15, "|%50s|", message);
+	mvprintw(5, 15, "|--------------------------------------------------|");
+	mvprintw(6, 15, "| >:                                               |");
+	mvprintw(7, 15, "|--------------------------------------------------|");
+	mvprintw(6, 20, "%s", input);
+	while(1) {
+		int in = getch();
+		const char* key = keyname(in);
+
+		if(in == ERR) continue;
+		if(strcmp(key, "KEY_BACKSPACE") == 0) {
+			input[strlen(input) - 1] = '\0';
+		}else if(strcmp(key, "^J") == 0) {
+			cancel = 0;
+			break;
+		}else if(strlen(key) == 1) {
+			if(strlen(input) > 44) continue;
+			input[strlen(input)] = key[0];
+			input[strlen(input) + 1] = '\0';
+		}else{
+			cancel = 1;
+			memcpy(input, UNTITLED, strlen(UNTITLED) + 1);
+			break;
+		}
+		mvprintw(6, 20, "%s ", input);
+	}
+	return cancel;
+}
+
 // Main function.
 int main(int argc, char *argv[]) {
 	// Variable to store character name in.
@@ -219,8 +263,17 @@ int main(int argc, char *argv[]) {
 	uint8_t mouseHeldDown = 0;
 	char filename[1024];
 	uint32_t sln = 0; // Starting Line Number
+	int16_t width = getmaxx(w);
+	int16_t height = getmaxy(w);
+	uint8_t saved = 1;
 
 	memset(filename, 0, 1024);
+	if(argc == 2) {
+		memcpy(filename, argv[1], strlen(argv[1]));
+		sct_file_load(filename, text);
+	}else{
+		memcpy(filename, UNTITLED, strlen(UNTITLED));
+	}
 
 	cbreak();
 	noecho();
@@ -232,8 +285,7 @@ int main(int argc, char *argv[]) {
 	raw();
 	mousemask(ALL_MOUSE_EVENTS, NULL);
 
-	// Print some text
-	mvprintw(0, 0, "Science's Creamy Text Editor - SCT");
+	sct_title(width, height, filename, saved);
 	sct_draw(w, text, line, &cursorx, &cursory, sln);
 	while(running) {
 		int32_t chr = getch();
@@ -249,20 +301,49 @@ int main(int argc, char *argv[]) {
 			}
 			// Clipboard
 			else if(strcmp(name, "^C") == 0) {
-				// Copy
+				sct_notify("Copy.");
 			}
 			else if(strcmp(name, "^V") == 0) {
-				// Paste
+				sct_notify("Paste.");
 			}
 			else if(strcmp(name, "^X") == 0) {
-				// Cut
+				sct_notify("Cut.");
 			}
 			// Save
 			else if(strcmp(name, "^S") == 0) {
-				sct_file_save("test.text", text);
+				if(strcmp(filename, UNTITLED) == 0) {
+					if(sct_popup(w, "Save As...", filename))
+					{
+						sct_draw(w, text, line, &cursorx,
+							&cursory, sln);
+						continue;
+					}
+					// Redraw screen
+					sct_draw(w, text, line, &cursorx,
+						&cursory, sln);
+				}
+				sct_file_save(filename, text);
+				saved = 1;
+				sct_title(width,height,filename,saved);
+				sct_notify("Saved file.");
 			}
 			else if(strcmp(name, "^O") == 0) {
-				sct_file_load("test.text", text);
+				if(sct_popup(w, "Open What File?", filename)) {
+					sct_draw(w, text, line, &cursorx,
+						&cursory, sln);
+					continue;
+				}
+				while(text->prev != NULL)
+					text = text->prev;
+				if(sct_file_load(filename, text)) {
+					sct_notify("Failed to open file.");
+				}else{
+					sct_notify("Successfully loaded file.");
+				}
+				saved = 1, sln = 0, cursorx = 0, cursory = 0,
+					selectx = 0, selecty = 0, line = text;
+				sct_title(width, height, filename, saved);
+				// Redraw screen
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
 			}
 			// Functions
@@ -289,10 +370,21 @@ int main(int argc, char *argv[]) {
 								cursorx + 1)+1);
 				}
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				// Changed
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
 //				line = sct_backspace(line->next);
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "^D") == 0) {
 				if(line->prev != NULL) {
@@ -315,18 +407,36 @@ int main(int argc, char *argv[]) {
 					cursorx = 0;
 				}
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				// Changed
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "^I") == 0) {
 				// Tab
 				line->tabs++;
 				if(line->tabs > 8) line->tabs = 8;
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				// Input
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "KEY_BTAB") == 0) {
 				// Shift - Tab
 				line->tabs--;
 				if(line->tabs < 0) line->tabs = 0;
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				// Input
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "^J") == 0) {
 				// Newline
@@ -334,6 +444,12 @@ int main(int argc, char *argv[]) {
 				line = sct_nextline(line, &text, &cursory, &sln);
 				cursorx = 0;
 				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				// Input
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 			}
 			else if(strcmp(name, "^[") == 0) {
 				// Alt + other
@@ -422,7 +538,8 @@ int main(int argc, char *argv[]) {
 						selectx = cx;
 						cursorx = sx;
 					}
-					sct_draw(w, text, line, &cursorx, &cursory, sln);
+					sct_draw(w, text, line, &cursorx,
+						&cursory, sln);
 					if(mouseHeldDown) {
 						if(selecty > cursory) {
 							
@@ -436,11 +553,23 @@ int main(int argc, char *argv[]) {
 					}
 				}
 			}
+			else if(strcmp(name, "KEY_RESIZE") == 0) {
+				width = getmaxx(w);
+				height = getmaxy(w);
+				sct_title(width, height, filename, saved);
+				sct_draw(w, text, line, &cursorx,&cursory, sln);
+				sct_notify("Resized.");
+			}
 			else {
 				sct_insert(w, text, line, &cursorx, &cursory,
 					name[0], sln);
+				if(saved) {
+					saved = 0;
+					sct_title(width,height,filename,saved);
+				}
+				sct_notify("Edit.");
 				// Character Insert
-//				printf("NAME: %s\n", name);
+//				printf("NAME: %s", name);
 			}
 		}
 		if(mouseHeldDown) {
