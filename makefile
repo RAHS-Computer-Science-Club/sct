@@ -1,2 +1,2 @@
 main:
-	clang src/*.c -Werror -Ofast -o sct
+	clang src/*.c -Werror -Ofast -o sct -lncurses
