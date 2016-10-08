@@ -30,10 +30,11 @@ static void sct_exit(uint8_t* running, const char* message) {
 	endwin();
 }
 
-static void sct_draw(textlist_t* text) {
+static void sct_draw(WINDOW* w, textlist_t* text, int8_t* x, int8_t* y) {
 	int i;
 	uint8_t infile = 1;
 
+	curs_set(FALSE);
 	for(i = 0; i < 10; i++) {
 		if(infile) {
 			mvprintw(i + 1, 0, "%s\n", text->text);
@@ -46,6 +47,8 @@ static void sct_draw(textlist_t* text) {
 			mvprintw(i + 1, 0, " ~ ~ ~ \n");
 		}
 	}
+	wmove(w, 1 + *y, *x);
+	curs_set(TRUE);
 }
 
 // Main function.
@@ -54,6 +57,7 @@ int main(int argc, char *argv[]) {
 	textlist_t* text = init_textlist();
 	uint8_t running = 1;
 	WINDOW *w = initscr();
+	int8_t cursorx = 0, cursory = 0;
 
 	cbreak();
 	noecho();
@@ -66,7 +70,7 @@ int main(int argc, char *argv[]) {
 
 	// Print some text
 	mvprintw(0, 0, "Science's Creamy Text Editor - SCT");
-	sct_draw(text);
+	sct_draw(w, text, &cursorx, &cursory);
 	while(running) {
 		int32_t chr = getch();
 		if(chr != ERR) {
@@ -88,8 +92,10 @@ int main(int argc, char *argv[]) {
 			}
 			// Functions
 			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
-				text->text[strlen(text->text) - 1] = '\0';
-				sct_draw(text);
+				cursorx--;
+				if(cursorx < 0) cursorx = 0;
+				text->text[cursorx] = '\0';
+				sct_draw(w, text, &cursorx, &cursory);
 			}
 			else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
@@ -122,8 +128,10 @@ int main(int argc, char *argv[]) {
 				// Page DN
 			}
 			else {
-				text->text[strlen(text->text)] = name[0];
-				sct_draw(text);
+				if(cursorx > 79) cursorx = 79;
+				text->text[cursorx] = name[0];
+				cursorx++;
+				sct_draw(w, text, &cursorx, &cursory);
 				// Character Insert
 //			printf("NAME: %s\n", name);
 			}
