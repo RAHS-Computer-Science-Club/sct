@@ -115,8 +115,8 @@ static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
 	refresh();
 }*/
 
-static void sct_renderlineselect(WINDOW* w, textlist_t* line, int8_t x, int8_t y,
-	int8_t lx)
+static void sct_renderlineselect(WINDOW* w, textlist_t* line, int8_t x,
+	int8_t y, int8_t lx)
 {
 	wmove(w, 1 + y, x + (line->tabs * 8));
 	chgat(lx - x, A_REVERSE, 0, NULL);
@@ -136,7 +136,7 @@ void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
 }
 
 static int8_t sct_mouseinputx(textlist_t* line, int8_t x) {
-	int rx = x - (line->tabs * 8);
+	int rx = x - ((line->tabs + 1)* 8);
 
 	if(rx < 0) rx = 0;
 	if(rx > strlen(line->text)) rx = strlen(line->text);
@@ -529,66 +529,24 @@ int main(int argc, char *argv[]) {
 				MEVENT event;
 
 				getmouse(&event);
-				if(event.bstate == BUTTON1_PRESSED ||
-					event.bstate == BUTTON1_CLICKED ||
-					event.bstate == BUTTON1_DOUBLE_CLICKED||
-					event.bstate == BUTTON1_TRIPLE_CLICKED )
-				{
-					cursorx = sct_mouseinputx(line,event.x);
-					cursory = sct_mouseinputy(event.y);
-					line = text;
-					for(int i = 0; i < cursory; i++) {
-						if(line->next) {
-							line = line->next;
-						}else{
-							cursory = i;
-						}
-					}
-					sct_draw(w, text, line, &cursorx, &cursory, sln);
-					mouseHeldDown = 1;
-				}
-				if(event.bstate == BUTTON1_RELEASED) {
-					selectx = sct_mouseinputx(line,event.x);
-					selecty = sct_mouseinputy(event.y);
-					line = text;
-					for(int i = 0; i < cursory; i++) {
-						if(line->next) {
-							line = line->next;
-						}else{
-							cursory = i;
-						}
-					}
-					if(selecty < cursory) {
-						int8_t sy = selecty;
-						int8_t cy = cursory;
-						int8_t sx = selectx;
-						int8_t cx = cursorx;
-
-						selecty = cy;
-						selectx = cx;
-						cursory = sy;
-						cursorx = sx;
-					}else if(selectx < cursorx) {
-						int8_t sx = selectx;
-						int8_t cx = cursorx;
-
-						selectx = cx;
-						cursorx = sx;
-					}
-					sct_draw(w, text, line, &cursorx,
-						&cursory, sln);
-					if(mouseHeldDown) {
-						if(selecty > cursory) {
-							
-						}else if(selectx > cursorx) {
-							sct_renderlineselect(w,
-								line, selectx,
-								selecty, cursorx
-							);
-						}
-						mouseHeldDown = 0;
+				cursory = sct_mouseinputy(event.y);
+				line = text;
+				for(int i = 0; i < cursory; i++) {
+					if(line->next) {
+						line = line->next;
+					}else{
+						cursory = i;
 					}
 				}
+				cursorx = sct_mouseinputx(line,event.x);
+				if(event.bstate==BUTTON1_DOUBLE_CLICKED) {
+					// TODO: Select Word
+					
+				}else if(event.bstate==BUTTON1_TRIPLE_CLICKED) {
+					// TODO: Select Line
+					
+				}
+				sct_draw(w, text, line, &cursorx,&cursory, sln);
 			}
 			else if(strcmp(name, "KEY_RESIZE") == 0) {
 				width = getmaxx(w);
@@ -608,13 +566,6 @@ int main(int argc, char *argv[]) {
 				// Character Insert
 //				printf("NAME: %s", name);
 			}
-		}
-		if(mouseHeldDown) {
-//			MEVENT event;
-//
-//			getmouse(&event);
-//			cursorx = event.x;
-//			sct_draw(w, text, line, &cursorx, &cursory, sln);
 		}
 	}
 	endwin();
