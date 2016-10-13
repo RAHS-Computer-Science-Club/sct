@@ -1,22 +1,24 @@
 /**
- * SCT Sciences Creamy Text Editor (c) Jeron Lau RAHS Computer Science Club.
- * The Unlicense
+ * SCT Sciences Creamy Text Editor(c) 2016 Jeron Lau RAHS Computer Science Club.
+ * LICENSED UNDER THE UNLICENSE
 **/
 
 #include <stdio.h> // For using printf()
 #include <string.h> // For using strlen()
-#include <ncurses.h> // For getting input, etc.
 #include <stdlib.h> // For exit()
 
 #include "sct.h"
 
 #define UNTITLED "UN-TITLED"
 
+#define KEYWORD_COUNT 40
+
 typedef struct {
 	WINDOW *w;
 	int8_t cursorx, cursory;
 	int8_t selectx, selecty;
 	uint8_t lh;
+	chunk_t kw[KEYWORD_COUNT];
 } sct_context_t;
 
 static textlist_t* init_textlist(void) {
@@ -101,6 +103,8 @@ static void sct_draw(sct_context_t* context, textlist_t* text, textlist_t* line,
 			mvprintw(i + 1, 0, "%5d | ", sln + i + 1);
 			attroff(A_DIM);
 			mvprintw(i + 1, 8 + text->tabs * 8, "%s\n", text->text);
+			sct_chunk(context->w, text->text, context->kw,
+				KEYWORD_COUNT, i + 1, text->tabs);
 			if(text->next) {
 				text = text->next;
 			}else{
@@ -220,19 +224,19 @@ static textlist_t* sct_backspace(sct_context_t* context, textlist_t** text,
 }
 
 static void sct_title(int32_t w, int32_t h, const char* f, uint8_t s) {
-	attron(A_BOLD | COLOR_PAIR(3));
+	attron(A_BOLD | COLOR_PAIR(1));
 	mvprintw(0,0,"Science's Creamy Text Editor - SCT %03dx%03d %45s",w,h,f);
 	if(!s) mvprintw(0,86 - strlen(f), "*");
-	attroff(A_BOLD | COLOR_PAIR(3));
+	attroff(A_BOLD | COLOR_PAIR(1));
 }
 
 static void sct_notify(sct_context_t* context, const char* message) {
 	attron(A_DIM);
 	mvprintw(1 + context->lh, 0, "|-----|");
 	attroff(A_DIM);
-	attron(A_BOLD | COLOR_PAIR(3));
+	attron(A_BOLD | COLOR_PAIR(1));
 	mvprintw(1 + context->lh, 8, "%80s", message);
-	attroff(A_BOLD | COLOR_PAIR(3));
+	attroff(A_BOLD | COLOR_PAIR(1));
 }
 
 static uint8_t sct_popup(sct_context_t* context, const char* message, char input[]) {
@@ -272,6 +276,12 @@ static uint8_t sct_popup(sct_context_t* context, const char* message, char input
 	return cancel;
 }
 
+static void
+addkeyword(sct_context_t* context, uint8_t i, const char* name, uint8_t color) {
+	memcpy(context->kw[i].chunk, name, strlen(name) + 1);
+	context->kw[i].color = color;
+}
+
 // Main function.
 int main(int argc, char *argv[]) {
 	sct_context_t context;
@@ -293,6 +303,55 @@ int main(int argc, char *argv[]) {
 	uint8_t saved = 1;
 
 	context.lh = height - 2;
+	// Variable Types Syntax Highlighting
+	addkeyword(&context, 0, "void", 3);
+	addkeyword(&context, 1, "uint8_t", 3);
+	addkeyword(&context, 2, "uint16_t", 3);
+	addkeyword(&context, 3, "uint32_t", 3);
+	addkeyword(&context, 4, "uint64_t", 3);
+	addkeyword(&context, 5, "int8_t", 3);
+	addkeyword(&context, 6, "int16_t", 3);
+	addkeyword(&context, 7, "int32_t", 3);
+	addkeyword(&context, 8, "int64_t", 3);
+	addkeyword(&context, 9, "int", 3);
+	addkeyword(&context, 10, "short", 3);
+	addkeyword(&context, 11, "char", 3);
+	addkeyword(&context, 12, "long", 3);
+	addkeyword(&context, 13, "static", 3);
+	addkeyword(&context, 14, "inline", 3);
+	addkeyword(&context, 15, "const", 3);
+
+	// Functionality
+	addkeyword(&context, 16, "break", 1);
+	addkeyword(&context, 17, "return", 1);
+	addkeyword(&context, 18, "typedef", 1);
+	addkeyword(&context, 19, "struct", 1);
+	addkeyword(&context, 20, "if", 1);
+	addkeyword(&context, 21, "else", 1);
+	addkeyword(&context, 22, "switch", 1);
+	addkeyword(&context, 23, "while", 1);
+	addkeyword(&context, 24, "for", 1);
+	addkeyword(&context, 25, "case", 1);
+	addkeyword(&context, 26, "default", 1);
+	addkeyword(&context, 27, "sizeof", 1);
+
+	// Macro
+	addkeyword(&context, 28, "#include", 7);
+	addkeyword(&context, 29, "#define", 7);
+	addkeyword(&context, 30, "#undef", 7);
+	addkeyword(&context, 31, "#ifdef", 7);
+	addkeyword(&context, 32, "#endif", 7);
+
+	// Constants
+	addkeyword(&context, 33, "NULL", 2);
+	addkeyword(&context, 34, "true", 2);
+	addkeyword(&context, 35, "false", 2);
+	addkeyword(&context, 36, "TRUE", 2);
+	addkeyword(&context, 37, "FALSE", 2);
+	addkeyword(&context, 38, "INFINITY", 2);
+
+	// Comments
+	addkeyword(&context, 39, "//", 5);
 
 	memset(filename, 0, 1024);
 	if(argc == 2) {
@@ -315,13 +374,13 @@ int main(int argc, char *argv[]) {
 	// Colors
 	start_color();
 	init_color(COLOR_BLACK, 0, 0, 0);
-	init_color(COLOR_WHITE, 1000, 1000, 1000);
+/*	init_color(COLOR_WHITE, 1000, 1000, 1000);
 	init_color(COLOR_RED, 1000, 0, 0);
 	init_color(COLOR_GREEN, 0, 1000, 0);
 	init_color(COLOR_BLUE, 0, 0, 1000);
-	init_color(COLOR_YELLOW, 1000, 1000, 0);
+	init_color(COLOR_YELLOW, 0, 1000, 0);
 	init_color(COLOR_CYAN, 0, 1000, 1000);
-	init_color(COLOR_MAGENTA, 1000, 1000, 0);
+	init_color(COLOR_MAGENTA, 1000, 1000, 0);*/
 	init_pair(1, COLOR_WHITE, COLOR_BLACK);
 	init_pair(2, COLOR_RED, COLOR_BLACK);
 	init_pair(3, COLOR_GREEN, COLOR_BLACK);
@@ -329,7 +388,6 @@ int main(int argc, char *argv[]) {
 	init_pair(5, COLOR_BLUE, COLOR_BLACK);
 	init_pair(6, COLOR_CYAN, COLOR_BLACK);
 	init_pair(7, COLOR_MAGENTA, COLOR_BLACK);
-	attron(COLOR_PAIR(1));
 
 	sct_title(width, height, filename, saved);
 	sct_draw(&context, text, line, sln);

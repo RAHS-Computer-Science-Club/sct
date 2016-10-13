@@ -1,3 +1,8 @@
+/**
+ * SCT Sciences Creamy Text Editor(c) 2016 Jeron Lau RAHS Computer Science Club.
+ * LICENSED UNDER THE UNLICENSE
+**/
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
