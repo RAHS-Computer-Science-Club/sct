@@ -11,7 +11,7 @@
 
 #define UNTITLED "UN-TITLED"
 
-#define KEYWORD_COUNT 40
+#define KEYWORD_COUNT 55
 
 typedef struct {
 	WINDOW *w;
@@ -353,6 +353,23 @@ int main(int argc, char *argv[]) {
 
 	// Comments
 	addkeyword(&context, 39, "//", 5);
+
+	// Standard Functions:
+	addkeyword(&context, 40, "realloc", 4 + 7);
+	addkeyword(&context, 41, "malloc", 4 + 7);
+	addkeyword(&context, 42, "free", 4 + 7);
+	addkeyword(&context, 43, "memcpy", 4 + 7);
+	addkeyword(&context, 44, "memmove", 4 + 7);
+	addkeyword(&context, 45, "memset", 4 + 7);
+	addkeyword(&context, 46, "strcmp", 4 + 7);
+	addkeyword(&context, 47, "strncmp", 4 + 7);
+	addkeyword(&context, 48, "printf", 4 + 7);
+	addkeyword(&context, 49, "scanf", 4 + 7);
+	addkeyword(&context, 50, "exit", 4 + 7);
+	addkeyword(&context, 51, "nanosleep", 4 + 7);
+	addkeyword(&context, 52, "sleep", 4 + 7);
+	addkeyword(&context, 53, "strlen", 4 + 7);
+	addkeyword(&context, 54, "strcat", 4 + 7);
 
 	memset(filename, 0, 1024);
 	if(argc == 2) {

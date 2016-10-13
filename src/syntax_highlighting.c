@@ -36,8 +36,13 @@ void sct_chunk(WINDOW *w, const char* data, chunk_t* keywords, uint8_t numkeywor
 		for(int j = 0; j < numkeywords; j++) {
 			if(strcmp(keywords[j].chunk, chunks[i].chunk) == 0) {
 				wmove(w, ln, 8 + (tabs * 8) + chunks[i].start);
-				chgat(strlen(keywords[j].chunk), A_BOLD,
-					keywords[j].color, NULL);
+				if(keywords[j].color > 7) {
+					chgat(strlen(keywords[j].chunk), 0,
+						keywords[j].color - 7, NULL);
+				}else{
+					chgat(strlen(keywords[j].chunk), A_BOLD,
+						keywords[j].color, NULL);
+				}
 			}
 		}
 	}
