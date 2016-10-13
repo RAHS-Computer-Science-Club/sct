@@ -687,6 +687,7 @@ int main(int argc, char *argv[]) {
 			} else if(strcmp(name, "KEY_RESIZE") == 0) {
 				width = getmaxx(context.w);
 				height = getmaxy(context.w);
+				context.lh = height - 2;
 				sct_title(width, height, filename, saved);
 				sct_draw(&context, text, line, sln);
 				sct_notify(&context, "Resized.");
