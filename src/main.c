@@ -12,6 +12,12 @@
 
 #define UNTITLED "UN-TITLED"
 
+typedef struct {
+	WINDOW *w;
+	int8_t cursorx, cursory;
+	int8_t selectx, selecty;
+} sct_context_t;
+
 static textlist_t* init_textlist(void) {
 	textlist_t* rtn = malloc(sizeof(textlist_t));
 	rtn->prev = NULL;
@@ -79,8 +85,8 @@ static void sct_exit(uint8_t* running, const char* message) {
 	endwin();
 }
 
-static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
-	int8_t* x, int8_t* y, uint32_t sln)
+static void sct_draw(sct_context_t* context, textlist_t* text, textlist_t* line,
+	uint32_t sln)
 {
 	int i;
 	uint8_t infile = 1;
@@ -102,8 +108,11 @@ static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
 			mvprintw(i + 1, 8, "\n");
 		}
 	}
-	wmove(w, 1 + *y, 8 + *x + (line->tabs * 8));
-	chgat(1, A_REVERSE, 0, NULL);
+	wmove(context->w, 1 + context->cursory, 8 + context->cursorx + (line->tabs * 8));
+	if(context->selecty)
+		chgat(79, A_REVERSE, 0, NULL);
+	else
+		chgat(context->selectx ? context->selectx : 1, A_REVERSE, 0, NULL);
 	refresh();
 }
 
@@ -115,15 +124,15 @@ static void sct_draw(WINDOW* w, textlist_t* text, textlist_t* line,
 	refresh();
 }*/
 
-static void sct_renderlineselect(WINDOW* w, textlist_t* line, int8_t x,
+static void sct_renderlineselect(sct_context_t* context, textlist_t* line, int8_t x,
 	int8_t y, int8_t lx)
 {
-	wmove(w, 1 + y, x + (line->tabs * 8));
+	wmove(context->w, 1 + y, x + (line->tabs * 8));
 	chgat(lx - x, A_REVERSE, 0, NULL);
 	refresh();
 }
 
-void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
+void sct_insert(sct_context_t* context, textlist_t* text, textlist_t* line,
 	int8_t* x, int8_t* y, char c, uint32_t sln)
 {
 	uint8_t max = 79 - (line->tabs * 8);
@@ -132,7 +141,7 @@ void sct_insert(WINDOW* w, textlist_t* text, textlist_t* line,
 	memmove(line->text + *x + 1, line->text + *x, strlen(line->text + *x) + 1);
 	line->text[*x] = c;
 	*x = *x + 1;
-	sct_draw(w, text, line, x, y, sln);
+	sct_draw(context, text, line, sln);
 }
 
 static int8_t sct_mouseinputx(textlist_t* line, int8_t x) {
@@ -151,30 +160,30 @@ static int8_t sct_mouseinputy(int8_t y) {
 	return ry;
 }
 
-static textlist_t* sct_cursorup(WINDOW* w, textlist_t** text, textlist_t* line,
-	int8_t* x, int8_t* y, uint32_t* sln)
+static textlist_t* sct_cursorup(sct_context_t* context, textlist_t** text,
+	 textlist_t* line, uint32_t* sln)
 {
 	if(line->prev) {
-		line = sct_prevline(line, text, y, sln);
-		*x = strlen(line->text);
-		sct_draw(w, *text, line, x, y, *sln);
+		line = sct_prevline(line, text, &context->cursory, sln);
+		context->cursorx = strlen(line->text);
+		sct_draw(context, *text, line, *sln);
 	}
 	return line;
 }
 
-static textlist_t* sct_cursordn(WINDOW* w, textlist_t** text, textlist_t* line,
-	int8_t* x, int8_t* y, uint32_t* sln, uint8_t end)
+static textlist_t* sct_cursordn(sct_context_t* context, textlist_t** text,
+	textlist_t* line, uint32_t* sln, uint8_t end)
 {
 	if(line->next) {
-		line = sct_nextline(line, text, y, sln);
-		*x = end ? strlen(line->text) : 0;
-		sct_draw(w, *text, line, x, y, *sln);
+		line = sct_nextline(line, text, &context->cursory, sln);
+		context->cursorx = end ? strlen(line->text) : 0;
+		sct_draw(context, *text, line, *sln);
 	}
 	return line;
 }
 
-static textlist_t* sct_backspace(WINDOW* w, textlist_t** text,
-	textlist_t* line, int8_t* x, int8_t* y, uint32_t* sln)
+static textlist_t* sct_backspace(sct_context_t* context, textlist_t** text,
+	textlist_t* line, uint32_t* sln)
 {
 	textlist_t* prev_item = line->prev;
 	textlist_t* next_item = line->next;
@@ -192,7 +201,7 @@ static textlist_t* sct_backspace(WINDOW* w, textlist_t** text,
 			temp = temp->next;
 			if(temp == NULL && (*text)->prev) {
 				*sln = *sln - 1;
-				*y = *y + 1;
+				context->cursory++;
 				*text = (*text)->prev;
 				break;
 			}
@@ -202,7 +211,7 @@ static textlist_t* sct_backspace(WINDOW* w, textlist_t** text,
 	if(next_item) {
 		return next_item;
 	}else{
-		sct_cursorup(w, text, line, x, y, sln);
+		sct_cursorup(context, text, line, sln);
 		return prev_item;
 	}
 }
@@ -216,7 +225,7 @@ static void sct_notify(const char* message) {
 	mvprintw(11, 0, "|-----| %77s |", message);
 }
 
-static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
+static uint8_t sct_popup(sct_context_t* context, const char* message, char input[]) {
 	uint8_t cancel = 0;
 
 	memset(input, '\0', strlen(input));
@@ -255,18 +264,21 @@ static uint8_t sct_popup(WINDOW* w, const char* message, char input[]) {
 
 // Main function.
 int main(int argc, char *argv[]) {
+	sct_context_t context;
+	context.w = initscr();
+	context.cursorx = 0;
+	context.cursory = 0;
+	context.selectx = 0;
+	context.selecty = 0;
 	// Variable to store character name in.
 	textlist_t* text = init_textlist();
 	textlist_t* line = text;
 	uint8_t running = 1;
-	WINDOW *w = initscr();
-	int8_t cursorx = 0, cursory = 0;
-	int8_t selectx = 0, selecty = 0;
 	uint8_t mouseHeldDown = 0;
 	char filename[1024];
 	uint32_t sln = 0; // Starting Line Number
-	int16_t width = getmaxx(w);
-	int16_t height = getmaxy(w);
+	int16_t width = getmaxx(context.w);
+	int16_t height = getmaxy(context.w);
 	uint8_t saved = 1;
 
 	memset(filename, 0, 1024);
@@ -279,16 +291,16 @@ int main(int argc, char *argv[]) {
 
 	cbreak();
 	noecho();
-	nodelay(w, TRUE);
-	keypad(w, TRUE);
-	meta(w, TRUE);
-	nodelay(w, TRUE);
+	nodelay(context.w, TRUE);
+	keypad(context.w, TRUE);
+	meta(context.w, TRUE);
+	nodelay(context.w, TRUE);
 	curs_set(FALSE);
 	raw();
 	mousemask(ALL_MOUSE_EVENTS, NULL);
 
 	sct_title(width, height, filename, saved);
-	sct_draw(w, text, line, &cursorx, &cursory, sln);
+	sct_draw(&context, text, line, sln);
 	sct_notify("Started Science's Creamy Text Editor!");
 	while(running) {
 		int32_t chr = getch();
@@ -299,32 +311,25 @@ int main(int argc, char *argv[]) {
 			// Close
 			if(strcmp(name, "^Q") == 0) {
 				sct_exit(&running, "EXITING ON QUIT");
-			}
-			else if(strcmp(name, "^W") == 0) {
+			} else if(strcmp(name, "^W") == 0) {
 				sct_exit(&running, "EXITING ON FILE CLOSE");
-			}
 			// Clipboard
-			else if(strcmp(name, "^C") == 0) {
+			} else if(strcmp(name, "^C") == 0) {
 				sct_notify("Copy.");
-			}
-			else if(strcmp(name, "^V") == 0) {
+			} else if(strcmp(name, "^V") == 0) {
 				sct_notify("Paste.");
-			}
-			else if(strcmp(name, "^X") == 0) {
+			} else if(strcmp(name, "^X") == 0) {
 				sct_notify("Cut.");
-			}
 			// Save
-			else if(strcmp(name, "^S")==0 || strcmp(name, "^E")==0){
+			}else if(strcmp(name,"^S")==0 || strcmp(name,"^E")==0) {
 				if(strcmp(filename, UNTITLED) == 0) {
-					if(sct_popup(w, "Save As...", filename))
+					if(sct_popup(&context, "Save As...", filename))
 					{
-						sct_draw(w, text, line, &cursorx,
-							&cursory, sln);
+						sct_draw(&context, text, line, sln);
 						continue;
 					}
 					// Redraw screen
-					sct_draw(w, text, line, &cursorx,
-						&cursory, sln);
+					sct_draw(&context, text, line, sln);
 				}
 				sct_file_save(filename, text);
 				saved = 1;
@@ -332,11 +337,9 @@ int main(int argc, char *argv[]) {
 				sct_notify("Saved file.");
 				if(strcmp(name, "^E") == 0)
 					sct_exit(&running, "SAVE & QUIT");
-			}
-			else if(strcmp(name, "^O") == 0) {
-				if(sct_popup(w, "Open What File?", filename)) {
-					sct_draw(w, text, line, &cursorx,
-						&cursory, sln);
+			} else if(strcmp(name, "^O") == 0) {
+				if(sct_popup(&context, "Open What File?", filename)) {
+					sct_draw(&context, text, line, sln);
 					continue;
 				}
 				while(text->prev != NULL)
@@ -346,44 +349,45 @@ int main(int argc, char *argv[]) {
 				}else{
 					sct_notify("Successfully loaded file.");
 				}
-				saved = 1, sln = 0, cursorx = 0, cursory = 0,
-					selectx = 0, selecty = 0, line = text;
+				saved = 1, sln = 0, context.cursorx = 0,
+					context.cursory = 0,
+					context.selectx = 0,
+					context.selecty = 0, line = text;
 				sct_title(width, height, filename, saved);
 				// Redraw screen
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
-			}
+				sct_draw(&context, text, line, sln);
 			// Functions
-			else if(strcmp(name, "KEY_BACKSPACE") == 0) {
-				cursorx--;
-				if(cursorx < 0) {
+			} else if(strcmp(name, "KEY_BACKSPACE") == 0) {
+				context.cursorx--;
+				if(context.cursorx < 0) {
 					if(line->tabs > 0) {
 						line->tabs--;
-						cursorx = 0;
+						context.cursorx = 0;
 					}else if(line->prev != NULL) {
-						line = sct_backspace(w,
-							&text, line, &cursorx,
-							&cursory, &sln);
-						cursorx = strlen(line->text);
+						line = sct_backspace(&context,
+							&text, line, &sln);
+						context.cursorx = strlen(line->text);
 					}else{
-						cursorx = 0;
+						context.cursorx = 0;
 					}
 				}else{
-					line->text[cursorx] = '\0';
-					if(line->text[cursorx + 1])
-						memmove(line->text + cursorx,
-							line->text+cursorx+1,
+					line->text[context.cursorx] = '\0';
+					if(line->text[context.cursorx + 1])
+						memmove(line->text +
+							context.cursorx,
+							line->text +
+							context.cursorx +1,
 							strlen(line->text +
-								cursorx + 1)+1);
+							 context.cursorx + 1)+1);
 				}
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				sct_draw(&context, text, line, sln);
 				// Changed
 				if(saved) {
 					saved = 0;
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "KEY_DC") == 0) {
+			} else if(strcmp(name, "KEY_DC") == 0) {
 				sct_exit(&running, "Delete");
 //				line = sct_backspace(line->next);
 				if(saved) {
@@ -391,73 +395,68 @@ int main(int argc, char *argv[]) {
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "^D") == 0) {
+			} else if(strcmp(name, "^D") == 0) {
 				if(line->prev != NULL) {
 					// Delete non-first line
-					line = sct_backspace(w, &text,
-						line, &cursorx, &cursory, &sln);
+					line = sct_backspace(&context, &text,
+						line, &sln);
 //					if(line->next)
 //						line = line->next;
 //					else
 //						sct_cursorup();
-					cursorx = strlen(line->text);
+					context.cursorx = strlen(line->text);
 				}else if(line->next != NULL) {
 					// Delete 1st line
 					text = textlist_delete(line);
 					line = text;
-					cursorx = 0;
+					context.cursorx = 0;
 				}else{
 					// Delete last line left
 					memset(text->text, '\0', 81);
-					cursorx = 0;
+					context.cursorx = 0;
 				}
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				sct_draw(&context, text, line, sln);
 				// Changed
 				if(saved) {
 					saved = 0;
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "^I") == 0) {
+			} else if(strcmp(name, "^I") == 0) {
 				// Tab
 				line->tabs++;
 				if(line->tabs > 8) line->tabs = 8;
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				sct_draw(&context, text, line, sln);
 				// Input
 				if(saved) {
 					saved = 0;
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "KEY_BTAB") == 0) {
+			} else if(strcmp(name, "KEY_BTAB") == 0) {
 				// Shift - Tab
 				line->tabs--;
 				if(line->tabs < 0) line->tabs = 0;
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				sct_draw(&context, text, line, sln);
 				// Input
 				if(saved) {
 					saved = 0;
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "^J") == 0) {
+			} else if(strcmp(name, "^J") == 0) {
 				// Newline
 				textlist_insert(line);
-				line = sct_nextline(line, &text, &cursory, &sln);
-				cursorx = 0;
-				sct_draw(w, text, line, &cursorx, &cursory, sln);
+				line = sct_nextline(line, &text, &context.cursory, &sln);
+				context.cursorx = 0;
+				sct_draw(&context, text, line, sln);
 				// Input
 				if(saved) {
 					saved = 0;
 					sct_title(width,height,filename,saved);
 				}
 				sct_notify("Edit.");
-			}
-			else if(strcmp(name, "^[") == 0) {
+			} else if(strcmp(name, "^[") == 0) {
 				int32_t chrtr;
 				const char* which = NULL;
 
@@ -490,73 +489,91 @@ int main(int argc, char *argv[]) {
 					sct_notify("unknown function.");
 				}
 				// Alt + other
-			}
-			else if(strcmp(name, "KEY_UP") == 0) {
-				line = sct_cursorup(w, &text, line, &cursorx,
-					&cursory, &sln);
-			}
-			else if(strcmp(name, "KEY_DOWN") == 0) {
-				line = sct_cursordn(w, &text, line, &cursorx,
-					&cursory, &sln, 1);
-			}
-			else if(strcmp(name, "KEY_RIGHT") == 0) {
-				if(cursorx >= strlen(line->text)) {
-					line = sct_cursordn(w, &text, line,
-						&cursorx, &cursory, &sln, 0);
+			} else if(strcmp(name, "KEY_UP") == 0) {
+				line = sct_cursorup(&context, &text, line, &sln);
+				context.selectx = 0;
+			} else if(strcmp(name, "KEY_DOWN") == 0) {
+				line = sct_cursordn(&context, &text, line, &sln, 1);
+				context.selectx = 0;
+			} else if(strcmp(name, "KEY_RIGHT") == 0) {
+				if(context.cursorx >= strlen(line->text)) {
+					line = sct_cursordn(&context, &text, line, &sln, 0);
 				}else{
-					cursorx++;
-					sct_draw(w, text, line, &cursorx,
-						&cursory, sln);
+					context.cursorx++;
+					sct_draw(&context, text, line, sln);
 				}
-			}
-			else if(strcmp(name, "KEY_LEFT") == 0) {
-				if(cursorx <= 0) {
-					line = sct_cursorup(w, &text, line,
-						&cursorx, &cursory, &sln);
+				context.selectx = 0;
+				context.selecty = 0;
+			} else if(strcmp(name, "KEY_LEFT") == 0) {
+				if(context.cursorx <= 0) {
+					line = sct_cursorup(&context, &text, line, &sln);
 				}else{
-					cursorx--;
-					sct_draw(w, text, line, &cursorx,
-						&cursory, sln);
+					context.cursorx--;
+					sct_draw(&context, text, line, sln);
 				}
-			}
-			else if(strcmp(name, "KEY_PPAGE") == 0) {
+				context.selectx = 0;
+				context.selecty = 0;
+			} else if(strcmp(name, "KEY_PPAGE") == 0) {
 				// Page UP
-			}
-			else if(strcmp(name, "KEY_NPAGE") == 0) {
+			} else if(strcmp(name, "KEY_NPAGE") == 0) {
 				// Page DN
-			}
-			else if(strcmp(name, "KEY_MOUSE") == 0) {
+			} else if(strcmp(name, "KEY_MOUSE") == 0) {
 				MEVENT event;
 
 				getmouse(&event);
-				cursory = sct_mouseinputy(event.y);
+				context.cursory = sct_mouseinputy(event.y);
 				line = text;
-				for(int i = 0; i < cursory; i++) {
+				for(int i = 0; i < context.cursory; i++) {
 					if(line->next) {
 						line = line->next;
 					}else{
-						cursory = i;
+						context.cursory = i;
 					}
 				}
-				cursorx = sct_mouseinputx(line,event.x);
+				context.cursorx = sct_mouseinputx(line,event.x);
 				if(event.bstate==BUTTON1_DOUBLE_CLICKED) {
-					// TODO: Select Word
-					
+					uint8_t erase = 1;
+					context.selecty = 0;
+					// Select Word
+					while(context.cursorx > 0) {
+						char c = line->text[context.cursorx];
+						if(c == ' ' || c == ',') {
+							erase = 0;
+							break;
+						}
+						context.cursorx--;
+					}
+					context.cursorx++;
+					for(int i = context.cursorx;;i++) {
+						char c = line->text[i];
+						if(c == ' ' || c == '\0' ||
+						 c == ',')
+						{
+							context.selectx =
+							    i - context.cursorx;
+							break;
+						}
+					}
+					context.cursorx -= erase;
+					context.selectx += erase;
 				}else if(event.bstate==BUTTON1_TRIPLE_CLICKED) {
-					// TODO: Select Line
-					
+					// Select Line
+					context.selecty = 1;
+					context.cursorx = 0;
+					context.selectx = 0;
+				}else{
+					context.selectx = 0;
+					context.selecty = 0;
 				}
-				sct_draw(w, text, line, &cursorx,&cursory, sln);
-			}
-			else if(strcmp(name, "KEY_RESIZE") == 0) {
-				width = getmaxx(w);
-				height = getmaxy(w);
+				sct_draw(&context, text, line, sln);
+			} else if(strcmp(name, "KEY_RESIZE") == 0) {
+				width = getmaxx(context.w);
+				height = getmaxy(context.w);
 				sct_title(width, height, filename, saved);
-				sct_draw(w, text, line, &cursorx,&cursory, sln);
+				sct_draw(&context, text, line, sln);
 				sct_notify("Resized.");
-			}
-			else {
-				sct_insert(w, text, line, &cursorx, &cursory,
+			} else {
+				sct_insert(&context, text, line, &context.cursorx, &context.cursory,
 					name[0], sln);
 				if(saved) {
 					saved = 0;
