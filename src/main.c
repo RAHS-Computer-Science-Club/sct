@@ -629,6 +629,16 @@ int main(int argc, char *argv[]) {
 				MEVENT event;
 
 				getmouse(&event);
+				if(event.bstate & BUTTON4_PRESSED) {
+					name = "KEY_UP";
+					goto SCT_DETECT;
+				}else if(event.bstate & BUTTON2_PRESSED ||
+					event.bstate == 0x8000000 ||
+					event.bstate ==	0x0200000)
+				{
+					name = "KEY_DOWN";
+					goto SCT_DETECT;
+				}
 				context.cursory = sct_mouseinputy(event.y);
 				line = text;
 				for(int i = 0; i < context.cursory; i++) {
