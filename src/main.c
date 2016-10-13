@@ -97,7 +97,9 @@ static void sct_draw(sct_context_t* context, textlist_t* text, textlist_t* line,
 			for(int j = 0; j < text->tabs; j++) {
 				mvprintw(i + 1, (j+1) * 8, "        ");
 			}
+			attron(A_DIM);
 			mvprintw(i + 1, 0, "%5d | ", sln + i + 1);
+			attroff(A_DIM);
 			mvprintw(i + 1, 8 + text->tabs * 8, "%s\n", text->text);
 			if(text->next) {
 				text = text->next;
@@ -218,12 +220,19 @@ static textlist_t* sct_backspace(sct_context_t* context, textlist_t** text,
 }
 
 static void sct_title(int32_t w, int32_t h, const char* f, uint8_t s) {
-	mvprintw(0,0,"Science's Creamy Text Editor - SCT %03dx%03d %44s",w,h,f);
+	attron(A_BOLD | COLOR_PAIR(3));
+	mvprintw(0,0,"Science's Creamy Text Editor - SCT %03dx%03d %45s",w,h,f);
 	if(!s) mvprintw(0,86 - strlen(f), "*");
+	attroff(A_BOLD | COLOR_PAIR(3));
 }
 
 static void sct_notify(sct_context_t* context, const char* message) {
-	mvprintw(1 + context->lh, 0, "|-----| %77s |", message);
+	attron(A_DIM);
+	mvprintw(1 + context->lh, 0, "|-----|");
+	attroff(A_DIM);
+	attron(A_BOLD | COLOR_PAIR(3));
+	mvprintw(1 + context->lh, 8, "%80s", message);
+	attroff(A_BOLD | COLOR_PAIR(3));
 }
 
 static uint8_t sct_popup(sct_context_t* context, const char* message, char input[]) {
@@ -302,6 +311,25 @@ int main(int argc, char *argv[]) {
 	curs_set(FALSE);
 	raw();
 	mousemask(ALL_MOUSE_EVENTS, NULL);
+
+	// Colors
+	start_color();
+	init_color(COLOR_BLACK, 0, 0, 0);
+	init_color(COLOR_WHITE, 1000, 1000, 1000);
+	init_color(COLOR_RED, 1000, 0, 0);
+	init_color(COLOR_GREEN, 0, 1000, 0);
+	init_color(COLOR_BLUE, 0, 0, 1000);
+	init_color(COLOR_YELLOW, 1000, 1000, 0);
+	init_color(COLOR_CYAN, 0, 1000, 1000);
+	init_color(COLOR_MAGENTA, 1000, 1000, 0);
+	init_pair(1, COLOR_WHITE, COLOR_BLACK);
+	init_pair(2, COLOR_RED, COLOR_BLACK);
+	init_pair(3, COLOR_GREEN, COLOR_BLACK);
+	init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+	init_pair(5, COLOR_BLUE, COLOR_BLACK);
+	init_pair(6, COLOR_CYAN, COLOR_BLACK);
+	init_pair(7, COLOR_MAGENTA, COLOR_BLACK);
+	attron(COLOR_PAIR(1));
 
 	sct_title(width, height, filename, saved);
 	sct_draw(&context, text, line, sln);
