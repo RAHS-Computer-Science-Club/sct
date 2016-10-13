@@ -111,8 +111,9 @@ static void sct_draw(sct_context_t* context, textlist_t* text, textlist_t* line,
 				infile = 0;
 			}
 		}else{
-			mvprintw(i + 1, 0, "      | ");
-			mvprintw(i + 1, 8, "\n");
+			attron(A_DIM);
+			mvprintw(i + 1, 0, "      |\n");
+			attroff(A_DIM);
 		}
 	}
 	wmove(context->w, 1 + context->cursory, 8 + context->cursorx + (line->tabs * 8));

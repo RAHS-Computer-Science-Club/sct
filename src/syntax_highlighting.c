@@ -10,19 +10,16 @@
 #include "sct.h"
 
 void sct_chunk(WINDOW *w, const char* data, chunk_t* keywords, uint8_t numkeywords, uint8_t ln, uint8_t tabs) {
-	chunk_t chunks[24];
+	chunk_t chunks[256];
 	uint8_t chunkc = 0;
 	uint8_t cursor = 0;
 
 	chunks[0].start = 0;
 	for(int i = 0; i < strlen(data); i++) {
-		if(data[i] == '\n') {
-			chunks[chunkc].chunk[cursor] = '\0';
-			break;
-		}else if(data[i] != ' ' && data[i] != ',' && data[i] != '*' && 
+		if(data[i] != ' ' && data[i] != ',' && data[i] != '*' && 
 			data[i] != ')' && data[i] != '(' && data[i] != ']' &&
 			data[i] != '[' && data[i] != '}' && data[i] != '{' &&
-			data[i] != ';')
+			data[i] != ';' && data[i] != '\n')
 		{
 			chunks[chunkc].chunk[cursor] = data[i];
 			cursor++;
@@ -33,9 +30,9 @@ void sct_chunk(WINDOW *w, const char* data, chunk_t* keywords, uint8_t numkeywor
 			cursor = 0;
 		}
 	}
-//		printf("[%s]", chunks[0].chunk);
+	chunks[chunkc].chunk[cursor] = '\0';
+	chunkc++;
 	for(int i = 0; i < chunkc; i++) {
-//		printf("[%s]", chunks[i].chunk);
 		for(int j = 0; j < numkeywords; j++) {
 			if(strcmp(keywords[j].chunk, chunks[i].chunk) == 0) {
 				wmove(w, ln, 8 + (tabs * 8) + chunks[i].start);
